@@ -145,7 +145,7 @@ class contInvest:
 
 	@staticmethod
 	def plot_instance(IR,IRbase,Istar,Istarbase,Sol,Solbase,Agrid,ylim=[]):
-		fig = plt.figure(frameon=False,figsize=(8,6),dpi=100)
+		fig = plt.figure(frameon=False,figsize=(8,6))
 		ax = fig.add_subplot(1,1,1)
 		ax.plot(Agrid,IR,linestyle='--',c='b')
 		ax.plot(Agrid,Istar,linestyle='--',c='r')
@@ -155,6 +155,8 @@ class contInvest:
 		ax.plot(Agrid,Solbase,linewidth=2,c='gray',alpha=0.1)
 		if ylim:
 			ax.set_ylim(ylim)
+		ax.set_xlabel('Assets')
+		ax.set_ylabel('Investment')
 		plt.legend(('Binding IC constraint','Unconstrained solution', 'Equilibrium'), loc='upper left')
 		fig.tight_layout()
 
@@ -206,7 +208,7 @@ class poolingCredit:
 		self.distr = stats.uniform(loc=self.Lower, scale=self.Upper-self.Lower)
 
 	def plot_distr(self):
-		fig, axes = plt.subplots(1,2, figsize=(12,6))
+		fig, axes = plt.subplots(1,2, figsize=(16,6))
 		plt.subplot(1,2,1) 
 		plt.plot(self.grids['B'],self.distr.pdf(self.grids['B']))
 		plt.xlabel('$B$')
@@ -222,7 +224,7 @@ class poolingCredit:
 		fig.tight_layout()
 
 	def plot_exp_profits(self):
-		fig, axes = plt.subplots(1,1,figsize=(6,6))
+		fig, axes = plt.subplots(1,1,figsize=(8,6))
 		plt.subplot(1,1,1)
 		profit,zeroprofit,ier = self.expected_profit(self.distr,self.pH,self.pL,self.R,self.I,1)
 		plt.plot(self.grids['B'],profit(self.grids['B']))
