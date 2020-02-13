@@ -4,6 +4,7 @@ import numpy as np
 import math
 import itertools
 import scipy.stats as stats
+import scipy.integrate as integrate
 import logging
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -206,3 +207,121 @@ class TwoAgent_GE:
 	def ue_equi(self,tau):
 		return self.u_e(self.e,tau,self.alpha,self.cap_equi(self,self.n,tau))
 
+
+
+
+
+class OptDebt:
+	"""
+	OptDebt defines the model of optimal debt with costly state verification.
+	"""
+
+	def __init__(self,name="",**kwargs):
+		self.name = name
+		self.base_par()
+		self.makegrids()
+		self.upd_par(kwargs)
+		self.ftype()
+
+	def base_par(self):
+		self.I = 1
+		self.R = 2
+		self.sDelta = 1
+		self.kappa = 0.1
+		self.sdist = 'uniform'
+
+	def makegrids(self):
+		self.ps = dict()
+		self.ps['sbarmin'] = 1-self.sDelta
+		self.ps['sbarmax'] = 1+self.sDelta
+		self.ps['sbar_n'] = 100
+
+		self.ps['Imin'] = 0
+		self.ps['Imax'] = 3
+		self.ps['I_n'] = 100
+		self.ps['Ibase'] = min(50,self.ps['I_n'])
+		
+		self.grids = dict()
+		self.grids['sbar'] = np.linspace(self.ps['sbarmin'],self.ps['sbarmax'],self.ps['sbar_n'])
+		self.grids['I'] = np.round(np.linspace(self.ps['Imin'], self.ps['Imax'], self.ps['I_n']),2)
+
+	def upd_par(self,kwargs):
+		for key,value in kwargs.items():
+			setattr(self,key,value)
+		self.makegrids()
+		self.ftype()
+
+	def ftype(self):
+		"""
+		NB: It is asssumed that the expected value of s is always 1.
+		Thus the user can only choose a level of variance for the
+		stochastic variable.
+		"""
+		if self.sdist == 'uniform':
+			self.s_pdf = lambda s: (1/(2*self.sDelta))*(s>(1-self.sDelta))*(s<(1+self.sDelta))
+			self.s_cdf = lambda s: ((s-(1-self.sDelta))/(2*self.sDelta))*(s>(1-self.sDelta))*(s<(1+self.sDelta))
+		else:
+			raise ValueError("Only 'uniform' distribution currently supported.")
+
+	@np.vectorize
+	def exp_profit(self,sbar):
+		return integrate.quad(lambda s: self.s_pdf(s)*self.R*(s-sbar), sbar, 1+self.sDelta)[0]
+
+	def vec_profit(self):
+		return self.exp_profit(self,self.grids['sbar'])
+
+	@np.vectorize
+	def participation_constr(self,sbar):
+		return integrate.quad(lambda s: self.s_pdf(s)*self.R*sbar, sbar,1+self.sDelta)[0]+integrate.quad(lambda s: self.s_pdf(s)*(self.R*s-self.kappa), 1-self.sDelta,sbar)[0]-self.I
+
+	def vec_part(self):
+		return self.participation_constr(self,self.grids['sbar'])
+
+	def plt_profit_participationconstr(self):
+		fig = plt.figure(frameon=False,figsize=(8,6))
+		ax = fig.add_subplot(1,1,1)
+		ax.plot(self.grids['sbar'],self.vec_profit())
+		ax.plot(self.grids['sbar'],self.vec_part())
+		ax.axhline(linestyle='--',linewidth=1,c='k')
+		ax.set_xlabel('$sbar$')
+		ax.set_ylabel('$E[\pi],(u(p)-u(np))$')
+		plt.legend(('Expected profits','Participation Constraint'))
+		plt.title('Expected profits and participation constraint',fontweight='bold')
+		fig.tight_layout()
+
+	def pc_grid_of_I(self):
+		def aux_sol(x):
+			par = {'I': x}
+			self.upd_par(par)
+			return {'I': self.vec_part()}
+		self.I_grid = {x: aux_sol(x) for x in self.grids['I']}
+		self.I_base = self.I_grid[self.grids['I'][self.ps['Ibase']]]
+		self.base_par()
+
+	@staticmethod
+	def plot_pc_instance(I,Ibase,sgrid):
+		fig = plt.figure(frameon=False,figsize=(8,6))
+		ax = fig.add_subplot(1,1,1)
+		ax.plot(sgrid,Ibase)
+		ax.plot(sgrid,I)
+		ax.axhline(linestyle='--',linewidth=1.5, c='k')
+		ax.set_ylabel('Expected gain from participation')
+		ax.set_xlabel('Audit threshold $s$')
+		ax.set_ylim([-4, 2])
+		plt.legend(('Baseline', 'Adjusted $I$'))
+		plt.title('Participation constraint for various $I$', fontweight='bold')
+		fig.tight_layout()
+
+	def plot_interactive_pc(self):
+		try:
+			getattr(self,"I_grid")
+		except AttributeError:
+			self.pc_grid_of_I()
+		def plot_from_dict(I):
+			OptDebt.plot_pc_instance(self.I_grid[I]['I'],self.I_base['I'],self.grids['I'])
+		I_slider = widgets.SelectionSlider(
+				description = "Investment cost, $I$",
+				options = self.grids['I'],
+				style = {'description_width': 'initial'})
+		widgets.interact(plot_from_dict,
+			I=I_slider)
